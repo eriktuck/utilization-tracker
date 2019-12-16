@@ -18,12 +18,12 @@ input_data_path = 'data/utilization-inputs.xlsx'
 hours_data_path = 'data/hours.xlsx'
 target_util = 0
 
-# @st.cache
+@st.cache
 def auth_gspread():
     scope = ['https://spreadsheets.google.com/feeds',
             'https://www.googleapis.com/auth/drive']
-    # # creds for local development
     try:
+        # creds for local development
         creds = ServiceAccountCredentials.from_json_keyfile_name(
             'secrets/gs_credentials.json', scope
         )
@@ -35,27 +35,6 @@ def auth_gspread():
         creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
         creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
-    
-    # creds_dict = json.loads(json_creds)
-    # creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
-    # creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scopes)
-    
-    # creds = ServiceAccountCredentials.from_json_keyfile_dict(
-    #     'UTILIZATION_KEY', scope
-    # )
-    
-    # creds = os.environ.get('UTILIZATION KEY')
-    # st.write(creds)
-    
-    # # Authorize
-    # creds_var = os.environ.get('UTILIZATION_KEY')
-    # creds_dict = json.loads(creds_var)
-    # st.write(creds_dict)
-    # # creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
-    
-    # creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    
-    # client = gspread.authorize(creds, scope)
     
     # return client
 
