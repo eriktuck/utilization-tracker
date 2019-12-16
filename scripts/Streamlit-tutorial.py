@@ -31,9 +31,9 @@ def auth_gspread():
     except:
         # creds for heroku deployment
         json_creds = os.environ.get("GOOGLE_SHEETS_CREDS_JSON")
-        creds = ServiceAccountCredentials.from_json_keyfile_name(
-            json_creds, scope
-        )
+        creds_dict = json.loads(json_creds)
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
         client = gspread.authorize(creds)
     
     # creds_dict = json.loads(json_creds)
