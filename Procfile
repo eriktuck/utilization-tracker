@@ -1,1 +1,1 @@
-web: streamlit run utilization-tracker.py
+web: streamlit run scripts/Streamlit-tutorial.py
