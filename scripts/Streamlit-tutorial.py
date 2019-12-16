@@ -2,20 +2,42 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+from oauth2client.service_account import ServiceAccountCredentials
+import gspread
 
 """
 # Utilization Report
 """
 # TODO
+# Read data from google sheet (can't upload data to Heroku)
 # No FTE support yet
 
-hours_report_path = '../data/hours.xlsx'
-input_data_path = '../data/utilization-inputs.xlsx'
+input_data_path = 'data/utilization-inputs.xlsx'
+hours_data_path = 'data/hours.xlsx'
 target_util = 0
 
 @st.cache
-def load_hours_report(hours_report_path):
-    df = pd.read_excel(hours_report_path, parse_dates=['Entry Date'])
+def auth_gspread():
+    scope = ['https://spreadsheets.google.com/feeds',
+            'https://www.googleapis.com/auth/drive']
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        'secrets/gs_credentials.json', scope
+    )
+    client = gspread.authorize(creds)
+    
+    # return client
+
+
+# @st.cache
+# def load_hours_report(client):
+    # df = pd.read_excel(hours_report_path, parse_dates=['Entry Date'])
+    hours_wks = client.open("Utilization-Hours").sheet1
+    data = hours_wks.get_all_values()
+    headers = data.pop(0)
+    df = pd.DataFrame(data, columns=headers)
+    df['Entry Date'] = pd.to_datetime(df['Entry Date'])
+    df['Hours Worked'] = pd.to_numeric(df['Hours Worked'])
+    df['Time Off Hrs'] = pd.to_numeric(df['Time Off Hrs'])
     df['Entry Month'] = pd.DatetimeIndex(df['Entry Date']).strftime('%b')
     df['Hours Worked'] = df['Hours Worked'] + df['Time Off Hrs']
     df['Activity Name'] = df['Activity Name'] + df['Time Off Type']
@@ -23,32 +45,45 @@ def load_hours_report(hours_report_path):
     # Activity names are imported with trailing whitespace, use pd.str.strip to remove
     df['Activity Name'] = df['Activity Name'].str.strip()
     
-    return df
+    # return df
 
 
-@st.cache
-def load_activities(input_data_path):
-    activities = pd.read_excel(input_data_path, 'ACTIVITY')
+# @st.cache
+# def load_activities(client):
+    wks = client.open("Utilization-Inputs").worksheet('ACTIVITY')
+    data = wks.get_all_values()
+    headers = data.pop(0)
+    activities = pd.DataFrame(data, columns=headers)
     
-    return activities
+    # return activities
 
 
-@st.cache
-def load_date_info(input_data_path):
-    dates = pd.read_excel(input_data_path, 'DATES', parse_dates=['Date'])
+# @st.cache
+# def load_date_info(client):
+    wks = client.open("Utilization-Inputs").worksheet('DATES')
+    data = wks.get_all_values()
+    headers = data.pop(0)
+    dates = pd.DataFrame(data, columns=headers)
+    dates['Date'] = pd.to_datetime(dates['Date'])
+    dates['Remaining'] = pd.to_numeric(dates['Remaining'])
     dates['Month'] = pd.DatetimeIndex(dates['Date']).strftime('%b')
     months = dates.groupby('Month').max()
     months['FTE'] = months['Remaining'] * 8
     
-    return dates, months
+    # return dates, months
 
 
-@st.cache
-def load_employees(input_data_path):
-    employees = pd.read_excel(input_data_path, 'NAMES')
+# @st.cache
+# def load_employees(client):
+    wks = client.open("Utilization-Inputs").worksheet('NAMES')
+    data = wks.get_all_values()
+    headers = data.pop(0)
+    employees = pd.DataFrame(data, columns=headers)
     names = ['Please select your name'] + list(employees['User Name'].unique())
     
-    return names
+    # return names
+
+    return df, activities, dates, months, names
 
 
 def build_utilization(name, hours_report, activities, dates, months, 
@@ -264,10 +299,13 @@ def balloons(predicted, target):
         st.balloons()
         
 # Load data
-hours_report = load_hours_report(hours_report_path)
-activities = load_activities(input_data_path)
-dates, months = load_date_info(input_data_path)
-names = load_employees(input_data_path)
+# gc = auth_gspread()
+# hours_report = load_hours_report(gc)
+# activities = load_activities(gc)
+# dates, months = load_date_info(gc)
+# names = load_employees(gc)
+
+hours_report, activities, dates, months, names = auth_gspread()
 
 # User selects name
 name = st.selectbox(
