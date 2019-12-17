@@ -11,12 +11,8 @@ import os
 # Utilization Report
 """
 # TODO
-# Read data from google sheet (can't upload data to Heroku)
 # No FTE support yet
-
-input_data_path = 'data/utilization-inputs.xlsx'
-hours_data_path = 'data/hours.xlsx'
-target_util = 0
+# No Practice Area support
 
 @st.cache
 def auth_gspread():
@@ -90,7 +86,8 @@ def auth_gspread():
     data = wks.get_all_values()
     headers = data.pop(0)
     employees = pd.DataFrame(data, columns=headers)
-    names = ['Please select your name'] + list(employees['User Name'].unique())
+    names = (['Please select your name']
+             + list(employees['User Name'].unique()))
     
     # return names
 
@@ -115,14 +112,14 @@ def build_utilization(name, hours_report, activities, dates, months,
     # Save only billable hours
     utilization = individual_hours.loc[individual_hours['Classification']=='Billable'].copy()
 
-    # Sort by month
+    # Create list of months and month dictionary for sorting later
     list_months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
                    'Jan', 'Feb', 'Mar']
-    month_index = np.arange(0,11)
+    month_index = np.arange(0,12)
     month_dict = dict(zip(list_months, month_index))
-
-    utilization['id'] = utilization['Entry Month'].replace(month_dict)
     
+    # Sort by month    
+    utilization['id'] = utilization['Entry Month'].replace(month_dict)
     utilization.sort_values('id', inplace=True)
     utilization.set_index('Entry Month', inplace=True)
     utilization.drop('id', axis=1, inplace=True)
@@ -130,6 +127,7 @@ def build_utilization(name, hours_report, activities, dates, months,
     # Save variables related to this month for prediction later on
     this_month = utilization.last_valid_index()
     last_day_worked = df['Entry Date'].max()
+    first_day_worked = df['Entry Date'].min()
     days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining']
     
     # Zero fill billable for remaining months (IMPROVE)
@@ -142,10 +140,24 @@ def build_utilization(name, hours_report, activities, dates, months,
             new_row = pd.Series([m, "Billable", 0], columns)
             utilization = utilization.append(new_row, ignore_index=True)
     
+    # Sort by month again   
+    utilization['id'] = utilization['Entry Month'].replace(month_dict)
+    utilization.sort_values('id', inplace=True)
     utilization.set_index('Entry Month', inplace=True)
+    utilization.drop('id', axis=1, inplace=True)
     
     # Update billable with FTE per month
     utilization = utilization.join(months['FTE'])
+    
+    # Correct FTE for employees who start in the middle of the performance period
+    first_month_worked = first_day_worked.strftime('%b')
+    first_month_index = list_months.index(first_month_worked)
+    first_month_FTE = dates.loc[dates['Date']==first_day_worked, 'Remaining'] * 8
+    
+    for m in list_months[0:first_month_index]:
+        utilization.at[m, 'FTE'] = 0
+    
+    utilization.at[first_month_worked, 'FTE'] = first_month_FTE    
     
     # Calculate actual utilization
     utilization['Utilization'] = utilization['Hours Worked'] / utilization['FTE']
@@ -190,14 +202,15 @@ def build_utilization(name, hours_report, activities, dates, months,
             )
     
     # Populate future months with predicted
-    for m in list_months:
-        if m not in existing_months:
-            utilization.at[m, 'Predicted Hours'] = (predicted 
-                                                    * utilization.loc[m, 'FTE']
-                                                    )
+    future_months = list_months[list_months.index(this_month)+1:]
+    for m in future_months:
+        utilization.at[m, 'Predicted Hours'] = (predicted 
+                                                * utilization.loc[m, 'FTE']
+                                                )
     
     # Calculate cumulative utilization as Expected Utilization
-    utilization['Expected Utilization'] = (utilization['Predicted Hours'].cumsum() 
+    # utilization_worked = utilization.iloc[first_month_index, :]
+    utilization['Predicted Utilization'] = (utilization['Predicted Hours'].cumsum() 
                                            / utilization['FTE'].cumsum())
     
     return utilization
@@ -221,7 +234,7 @@ def plot_hours(data, target, current_month=12):
         ax1.axes.axvline(i, color='white', linewidth=2)
 
     # Plot data
-    ax1.plot(data['Expected Utilization']*100, color=util_color, linewidth=3, alpha=.85)
+    ax1.plot(data['Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
 
     # Plot actuals
     ax1.plot(data['Utilization']*100, color=util_color, marker='x', lw=0)
@@ -287,7 +300,7 @@ def plot_hours(data, target, current_month=12):
     ax1.spines['bottom'].set_color('silver')
 
     # Labels
-    util_value = (data.loc[data.index=='Mar', 'Expected Utilization']
+    util_value = (data.loc[data.index=='Mar', 'Predicted Utilization']
                   * 100)
     ax1.text(11.1, util_value-3, f' Predicted \n Utilization ({int(util_value)}%)', 
              color=util_color)
@@ -325,7 +338,7 @@ name = st.selectbox(
 )
 
 # User inputs target utilization
-target_util = st.number_input("What's your target utilization?", 0, 100, target_util)
+target_util = st.number_input("What's your target utilization?", 0, 100)
 
 chart_loc = st.empty()
 message_loc = st.empty()
