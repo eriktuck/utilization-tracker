@@ -4,7 +4,7 @@ import win32com.client
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-file_path = os.path.expanduser("~/Desktop/Utilization_Report")
+folder_path = os.path.join(os.getcwd(), 'data')
 today = datetime.date.today()
 
 outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
@@ -17,7 +17,9 @@ for message in messages:
         # body_content = message.body
         attachments = message.Attachments
         attachment = attachments.Item(1)
-        attachment.SaveAsFile(os.path.join(file_path, str(attachment)))
+        attachment.SaveAsFile(os.path.join(folder_path, str(attachment)))
+
+print ("Utilization Report saved")
 
 scope = ['https://spreadsheets.google.com/feeds',
          'https://www.googleapis.com/auth/drive']
@@ -28,7 +30,10 @@ creds = ServiceAccountCredentials.from_json_keyfile_name(
 client = gspread.authorize(creds)
 
 gfile = client.open("Utilization-Hours").id  
-report_path = os.path.join(file_path, "Utilization Report Daily.csv")
+report_path = os.path.join(folder_path, "Utilization Report Daily.csv")
 data = open(report_path, 'r').read()
+data = data.encode('utf-8')
 
 client.import_csv(gfile, data)
+
+print ("Utilization Report uploaded")
