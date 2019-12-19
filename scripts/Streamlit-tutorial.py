@@ -125,7 +125,7 @@ def build_utilization(name, hours_report, activities, dates, months,
     utilization.drop('id', axis=1, inplace=True)
     
     # Save variables related to this month for prediction later on
-    this_month = individual_hours.last_valid_index()
+    this_month = df.iloc[-1, df.columns.get_loc('Entry Month')]
     last_day_worked = df['Entry Date'].max()
     first_day_worked = df['Entry Date'].min()
     days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining']
