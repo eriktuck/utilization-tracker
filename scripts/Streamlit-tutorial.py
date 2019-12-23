@@ -24,13 +24,13 @@ def auth_gspread():
             'secrets/gs_credentials.json', scope
         )
         client = gspread.authorize(creds)
-    # except:
-    #     # creds for heroku deployment
-    #     json_creds = os.environ.get("GOOGLE_SHEETS_CREDS_JSON")
-    #     creds_dict = json.loads(json_creds)
-    #     creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
-    #     creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    #     client = gspread.authorize(creds)
+    except:
+        # creds for heroku deployment
+        json_creds = os.environ.get("GOOGLE_SHEETS_CREDS_JSON")
+        creds_dict = json.loads(json_creds)
+        creds_dict["private_key"] = creds_dict["private_key"].replace("\\\\n", "\n")
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
+        client = gspread.authorize(creds)
     
     # return client
 
@@ -125,7 +125,7 @@ def build_utilization(name, hours_report, activities, dates, months,
     utilization.drop('id', axis=1, inplace=True)
     
     # Save variables related to this month for prediction later on
-    this_month = df.iloc[-1, df.columns.get_loc('Entry Month')]
+    this_month = utilization.last_valid_index()
     last_day_worked = df['Entry Date'].max()
     first_day_worked = df['Entry Date'].min()
     days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining']
@@ -237,10 +237,10 @@ def plot_hours(data, target, current_month=12):
     ax1.plot(data['Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
 
     # Plot actuals
-    ax1.plot(data['Utilization']*100, color=util_color, marker='x', lw=0)
+    ax1.plot(data['Utilization']*100, color=util_color, marker='o', lw=0)
 
     # Plot projected
-    ax1.plot(data['Util to Date']*100, color=util_color, marker='o', lw=0, alpha=1)
+    ax1.plot(data['Util to Date']*100, color=util_color, marker='x', lw=0, alpha=1)
 
     # Plot targets
     ax1.plot([util_target]*12, color=util_color, linestyle='dotted')
