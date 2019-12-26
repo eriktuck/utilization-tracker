@@ -340,7 +340,7 @@ name = st.selectbox(
 )
 
 # User inputs target utilization
-target_util = st.number_input("What's your target utilization?", 0, 100)
+target_util = st.number_input("What's your target utilization?", 0, 100, 0)
 
 chart_loc = st.empty()
 message_loc = st.empty()
