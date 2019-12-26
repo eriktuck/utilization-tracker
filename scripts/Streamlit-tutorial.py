@@ -105,9 +105,7 @@ def build_utilization(name, hours_report, activities, dates, months,
         ).reset_index()
 
     # Calculate monthly total hours
-    individual_hours = (df[df['User Name']==name]
-                        .groupby(['Entry Month', 'Classification']).sum()
-                        .reset_index())
+    individual_hours = df.groupby(['Entry Month', 'Classification']).sum().reset_index()
     
     # Save only billable hours
     utilization = individual_hours.loc[individual_hours['Classification']=='Billable'].copy()
@@ -125,8 +123,9 @@ def build_utilization(name, hours_report, activities, dates, months,
     utilization.drop('id', axis=1, inplace=True)
     
     # Save variables related to this month for prediction later on
-    this_month = utilization.last_valid_index()
-    last_day_worked = df['Entry Date'].max()
+    # this_month = utilization.last_valid_index()
+    last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
+    this_month = last_day_worked.strftime('%b')
     first_day_worked = df['Entry Date'].min()
     days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining']
     
@@ -213,7 +212,10 @@ def build_utilization(name, hours_report, activities, dates, months,
     utilization['Predicted Utilization'] = (utilization['Predicted Hours'].cumsum() 
                                            / utilization['FTE'].cumsum())
     
-    return utilization
+    # Format last day worked for printing
+    last_day_f = last_day_worked.strftime('%A, %B %e, %Y')
+    
+    return utilization, last_day_f
 
 
 def plot_hours(data, target, current_month=12):
@@ -342,6 +344,7 @@ target_util = st.number_input("What's your target utilization?", 0, 100)
 
 chart_loc = st.empty()
 message_loc = st.empty()
+# date_loc = st.empty()
 
 
 # Build utilization report for user
@@ -359,7 +362,7 @@ if name != names[0]:
 #                                        " in the future. I plan to maintain this "
 #                                        " utilization going forward.", 0, 100)
 
-    df = build_utilization(name, hours_report, activities, dates, months, method)
+    df, valid_date = build_utilization(name, hours_report, activities, dates, months, method)
 
     # Plot results
     plot, predicted_utilization = plot_hours(df, target_util)
@@ -367,6 +370,9 @@ if name != names[0]:
 
     # Display a congratulatory or warning message based on prediction 
     message(predicted_utilization, target_util)
+    
+    # Show the last valid date of the data
+    # date_loc.text(f'Data valid through {valid_date}')
 
 
     # User may display data
@@ -378,3 +384,7 @@ if name != names[0]:
     if not st.checkbox("That's enough balloons"):
         balloons(predicted_utilization, target_util)
     
+    st.write('')
+    st.write('')
+    st.write('')
+    st.write(f'Data valid through {valid_date}')
