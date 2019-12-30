@@ -3,4 +3,5 @@ venv
 .env
 notebooks/
 secrets/
-data/
+data/*
+run-util-report.bat
