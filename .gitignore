@@ -2,6 +2,9 @@ venv
 *.pyc
 .env
 notebooks/
-secrets/
+secrets/*
 data/*
 run-util-report.bat
+
+# keep necessary folders
+!.keep

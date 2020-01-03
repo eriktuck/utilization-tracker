@@ -6,6 +6,7 @@ from oauth2client.service_account import ServiceAccountCredentials
 import gspread
 import json
 import os
+import datetime
 
 """
 # Utilization Report
@@ -111,8 +112,12 @@ def build_utilization(name, hours_report, activities, dates, months,
     utilization = individual_hours.loc[individual_hours['Classification']=='Billable'].copy()
 
     # Create list of months and month dictionary for sorting later
+    global list_months, semester1, semester2
     list_months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
                    'Jan', 'Feb', 'Mar']
+    semester1 = list_months[:7]
+    semester2 = list_months[7:]
+    
     month_index = np.arange(0,12)
     month_dict = dict(zip(list_months, month_index))
     
@@ -125,9 +130,12 @@ def build_utilization(name, hours_report, activities, dates, months,
     # Save variables related to this month for prediction later on
     # this_month = utilization.last_valid_index()
     last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
+    if last_day_worked > datetime.datetime.today():
+        last_day_worked = datetime.datetime.today().date()
+    global this_month
     this_month = last_day_worked.strftime('%b')
     first_day_worked = df['Entry Date'].min()
-    days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining']
+    days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining'] - 1
     
     # Zero fill billable for remaining months (IMPROVE)
     # list_months = months.index
@@ -167,13 +175,13 @@ def build_utilization(name, hours_report, activities, dates, months,
     
     # Calculate key variables
     current_hours = utilization.loc[this_month, 'Hours Worked']
-    current_utilization = utilization.loc[this_month, 'Utilization']
-    hours_remaining = days_remaining * 8    
-    predicted_hours = current_hours + (hours_remaining * current_utilization)
+    fte_hours = utilization.loc[this_month, 'FTE']
+    fte_hours_to_date = fte_hours - days_remaining * 8
+    predicted_hours = (current_hours/fte_hours_to_date) * fte_hours
     
     # Update Util to Date column at the current month with predicted
     utilization.at[this_month, 'Util to Date'] = (
-        predicted_hours/utilization.loc[this_month, 'FTE']
+        predicted_hours/fte_hours
         )
     
     # Forecast forward looking utilization
@@ -192,33 +200,44 @@ def build_utilization(name, hours_report, activities, dates, months,
             predicted = utilization.loc[last_month, 'Utilization']
         else:
             predicted = utilization.loc[this_month, 'Util to Date']
-    elif method == "Year to Date":
+    elif method == "Year (Semester) to Date":
         current_month_index = list_months.index(this_month)
-        current_df = utilization.iloc[0:current_month_index+1]
-        predicted = (
-            (current_df['Predicted Hours'].sum())
-             / current_df['FTE'].sum()
-            )
+        if not by_semester:
+            current_df = utilization.iloc[0:current_month_index+1]
+            predicted = (
+                (current_df['Predicted Hours'].sum())
+                / current_df['FTE'].sum()
+                )
+        else:
+            current_df = utilization.iloc[7:current_month_index+1]
+            predicted = (
+                (current_df['Predicted Hours'].sum())
+                / current_df['FTE'].sum()
+                )
     
     # Populate future months with predicted
-    future_months = list_months[list_months.index(this_month)+1:]
+    future_months = list_months[list_months.index(this_month) + 1:]
     for m in future_months:
         utilization.at[m, 'Predicted Hours'] = (predicted 
                                                 * utilization.loc[m, 'FTE']
                                                 )
     
-    # Calculate cumulative utilization as Expected Utilization
-    # utilization_worked = utilization.iloc[first_month_index, :]
+    # Calculate cumulative utilization for each semester    
     utilization['Predicted Utilization'] = (utilization['Predicted Hours'].cumsum() 
                                            / utilization['FTE'].cumsum())
-    
+    # Update chart for semester to date
+    if by_semester:
+        utilization.loc[semester2, 'Predicted Utilization'] = (
+            utilization.loc[semester2, 'Predicted Hours'].cumsum() 
+            / utilization.loc[semester2, 'FTE'].cumsum()
+            )
     # Format last day worked for printing
     last_day_f = last_day_worked.strftime('%A, %B %e, %Y')
     
     return utilization, last_day_f
 
 
-def plot_hours(data, target, current_month=12):
+def plot_hours(data, target):
     plt.rcParams['font.sans-serif'] = 'Tahoma'
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.size'] = 13
@@ -226,7 +245,8 @@ def plot_hours(data, target, current_month=12):
     util_color = '#006040'
     util_target = target
 
-    current_month_index = current_month - 4  # Month of april is 4
+    current_month = list_months.index(this_month)
+    current_month_index = current_month
 
     fig, ax1 = plt.subplots(figsize=[10.75,7])
 
@@ -236,7 +256,11 @@ def plot_hours(data, target, current_month=12):
         ax1.axes.axvline(i, color='white', linewidth=2)
 
     # Plot data
-    ax1.plot(data['Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
+    if by_semester:
+        ax1.plot(data.loc[semester1, 'Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
+        ax1.plot(data.loc[semester2, 'Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
+    else:
+        ax1.plot(data.loc[:,'Predicted Utilization']*100, color=util_color, linewidth=3, alpha=.85)
 
     # Plot actuals
     ax1.plot(data['Utilization']*100, color=util_color, marker='o', lw=0)
@@ -324,13 +348,8 @@ def balloons(predicted, target):
     if predicted > target and target > 0:
         st.balloons()
         
-# Load data
-# gc = auth_gspread()
-# hours_report = load_hours_report(gc)
-# activities = load_activities(gc)
-# dates, months = load_date_info(gc)
-# names = load_employees(gc)
 
+# Load data
 hours_report, activities, dates, months, names = auth_gspread()
 
 # User selects name
@@ -344,18 +363,21 @@ target_util = st.number_input("What's your target utilization?", 0, 100, 0)
 
 chart_loc = st.empty()
 message_loc = st.empty()
-# date_loc = st.empty()
-
-
+method_loc = st.empty()
+        
 # Build utilization report for user
 if name != names[0]:
     # User inputs prediction method
-    methods = ["Month to Date", "Last Month", "Year to Date"]
-    method = st.selectbox(
+    methods = ["Month to Date", "Last Month", "Year (Semester) to Date"]
+    method = method_loc.selectbox(
         'I would like to change how you predict my utilization. '
         'Use my utilization from:',
         (methods)
     )
+    
+    by_semester = False
+    if st.checkbox('Split the data by semester'):
+        by_semester = True
 
 # # User inputs raw value for prediction
 # provided_utilization = st.number_input("Use this value to predict my utilizion "
@@ -370,11 +392,7 @@ if name != names[0]:
 
     # Display a congratulatory or warning message based on prediction 
     message(predicted_utilization, target_util)
-    
-    # Show the last valid date of the data
-    # date_loc.text(f'Data valid through {valid_date}')
-
-
+        
     # User may display data
     if st.checkbox('Show data'):
         st.subheader('Utilization Data')
