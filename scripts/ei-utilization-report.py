@@ -258,6 +258,13 @@ def plot_hours(data, target, mode='focus'):
     other_color = '#f0ca6c'
     time_off_color = '#A7A7A7'
     full_time_color = '#ee6642'
+    
+    c_util_color = '#5B9BD5'
+    c_r_and_d_color = '#ED7D31'
+    c_other_color = '#A5A5A5'
+    c_time_off_color = '#FFC000'
+    c_full_time_color = '#FF0000'
+
     util_target = target
     
     util_value = (data.loc[data.index=='Mar', 'Predicted Utilization']* 100)
@@ -352,6 +359,7 @@ def plot_hours(data, target, mode='focus'):
             x_labels = billable_hours.index
             
         else:
+            # update hours with year average
             ind = np.arange(12+1)
             billable_hours = billable_hours.append(pd.Series(data['Billable'].sum()/data.loc[:this_month, 'FTE'].sum()*100, index=['Year']))
             r_and_d_hours = r_and_d_hours.append(pd.Series(data['R&D'].sum()/data.loc[:this_month, 'FTE'].sum()*100, index=['Year']))
@@ -365,14 +373,14 @@ def plot_hours(data, target, mode='focus'):
         other_hours.fillna(0, inplace=True)
         time_off_hours.fillna(0, inplace=True)
         
-        ax1.bar(ind, billable_hours, width=width, color=util_color, label='Utilization')
-        ax1.bar(ind, r_and_d_hours, width=width, bottom=billable_hours, color=r_and_d_color, label='R&D')
-        ax1.bar(ind, other_hours, width=width, bottom=billable_hours + r_and_d_hours, color=other_color, label='Other')
-        ax1.bar(ind, time_off_hours, width=width, bottom=billable_hours + r_and_d_hours+other_hours, color=time_off_color, label='Time Off')
+        ax1.bar(ind, billable_hours, width=width, color=c_util_color, label='Utilization')
+        ax1.bar(ind, r_and_d_hours, width=width, bottom=billable_hours, color=c_r_and_d_color, label='R&D')
+        ax1.bar(ind, other_hours, width=width, bottom=billable_hours + r_and_d_hours, color=c_other_color, label='Other')
+        ax1.bar(ind, time_off_hours, width=width, bottom=billable_hours + r_and_d_hours+other_hours, color=c_time_off_color, label='Time Off')
         
         # Plot targets
-        ax1.plot([util_target]*len(ind), color=util_color, linestyle='dotted')
-        ax1.plot([110]*len(ind), color=time_off_color, linestyle='dotted')
+        ax1.plot([util_target]*len(ind), color=c_util_color, linestyle='dotted')
+        ax1.plot([110]*len(ind), color='#70AD47', linestyle='dotted')
         ax1.plot([125]*len(ind), color=full_time_color, linestyle='dotted')        
         
         # Plot planned utilization
@@ -385,7 +393,7 @@ def plot_hours(data, target, mode='focus'):
             target_util = target_df.values.tolist()[0]
             target_util = [t * 100 for t in target_util]        
         
-            ax1.plot(target_util, color='black', marker='s', lw=0, alpha=1, label = 'Planned Utilization')
+            ax1.plot(target_util, marker='s', markerfacecolor=c_util_color, markeredgewidth=1, markeredgecolor='white', lw=0, alpha=1, label = 'Planned Utilization')
         
         # Add legend
         ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=5, frameon=False, columnspacing=3)
@@ -429,6 +437,8 @@ def plot_hours(data, target, mode='focus'):
 
     # Indicate current month
     ax1.get_xticklabels()[current_month_index].set_fontweight('bold')
+    if mode == 'Classic':
+        util_color = c_util_color
     ax1.get_xticklabels()[current_month_index].set_color(util_color)
     
     return fig, util_value.item()
