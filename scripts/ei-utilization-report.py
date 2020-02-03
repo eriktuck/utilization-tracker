@@ -96,6 +96,9 @@ def build_utilization(name, hours_report, activities, dates, months,
         activities.set_index('Activity Name')
         ).reset_index()
     
+    # Set any null Classification values to 'Billable' in case not in Activity sheet
+    df.fillna({'Classification': 'Billable'}, inplace=True) 
+    
     # Calculate monthly total hours
     individual_hours = df.groupby(['Entry Month', 'Classification']).sum().reset_index()
     
