@@ -97,7 +97,7 @@ def build_utilization(name, hours_report, activities, dates, months,
         ).reset_index()
     
     # Set any null Classification values to 'Billable' in case not in Activity sheet
-    df.fillna({'Classification': 'Billable'}, inplace=True) 
+    df['Classification'].fillna('Billable', inplace=True) 
     
     # Calculate monthly total hours
     individual_hours = df.groupby(['Entry Month', 'Classification']).sum().reset_index()
@@ -146,7 +146,9 @@ def build_utilization(name, hours_report, activities, dates, months,
     # this_month = utilization.last_valid_index()
     last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
     if last_day_worked > datetime.datetime.today():
-        last_day_worked = datetime.datetime.today().date()
+        last_day_worked = datetime.datetime.strptime(
+            datetime.datetime.today().strftime('%Y-%m-%d 00:00:00'), 
+            '%Y-%m-%d 00:00:00')
     global this_month
     this_month = last_day_worked.strftime('%b')
     first_day_worked = df['Entry Date'].min()
