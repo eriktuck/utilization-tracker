@@ -103,6 +103,7 @@ def build_utilization(names, hours_report, activities, dates, months,
     
     # create an empty dataframe to sum each user's utilization
     total_table = pd.DataFrame(index=list_months)
+    last_days = []
     
     for name in names:
         # Subset and copy (don't mutate cached data, per doc)
@@ -154,6 +155,7 @@ def build_utilization(names, hours_report, activities, dates, months,
         last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
         if last_day_worked > datetime.datetime.today():
             last_day_worked = datetime.datetime.today().date()
+        last_days.append(last_day_worked)
         global this_month
         this_month = last_day_worked.strftime('%b')
         first_day_worked = df['Entry Date'].min()
@@ -191,6 +193,9 @@ def build_utilization(names, hours_report, activities, dates, months,
     
     # swap total_table back in for utilization table
     utilization = total_table
+    
+    # get minimum of the last day worked
+    last_day_worked = min(last_days)
     
     # Calculate actual utilization
     utilization['Utilization'] = utilization['Billable'] / utilization['FTE']
