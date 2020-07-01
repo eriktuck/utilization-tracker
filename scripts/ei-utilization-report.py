@@ -49,6 +49,8 @@ def auth_gspread():
     df['Activity Name'] = df['Activity Name'] + df['Time Off Type']
     df.drop(['Time Off Hrs', 'Time Off Type'], axis=1, inplace=True)
     
+    print(df.tail(10))
+    
     # Activity names are imported with trailing whitespace, use pd.str.strip to remove
     df['Activity Name'] = df['Activity Name'].str.strip()
 
@@ -86,99 +88,109 @@ def auth_gspread():
     return df, activities, dates, months, names, targets
 
 
-def build_utilization(name, hours_report, activities, dates, months, 
+def build_utilization(names, hours_report, activities, dates, months, 
                       method="This Month to Date", provided_utilization=None):
-    # Subset and copy (don't mutate cached data, per doc)
-    df = hours_report.loc[hours_report['User Name']==name].copy()
-
-    # Join activities
-    df = df.set_index('Activity Name').join(
-        activities.set_index('Activity Name')
-        ).reset_index()
     
-    # Set any null Classification values to 'Billable' in case not in Activity sheet
-    df.fillna({'Classification': 'Billable'}, inplace=True) 
-    
-    # Calculate monthly total hours
-    individual_hours = df.groupby(['Entry Month', 'Classification']).sum().reset_index()
-    
-    # Save hours by category (copy utilization and merge other columns)
-    utilization = individual_hours.loc[individual_hours['Classification']=='Billable'].copy()
-    r_and_d = individual_hours.loc[individual_hours['Classification']=='R&D']
-    other = individual_hours.loc[individual_hours['Classification']=='Other']
-    time_off = individual_hours.loc[individual_hours['Classification']=='Time Off']
-    
-    # Join labor categories to utilization table
-    utilization = pd.merge(utilization, r_and_d, on='Entry Month', how='outer', suffixes=('','_y'))
-    utilization.drop('Classification_y', inplace=True, axis=1)
-    utilization.rename(columns={'Hours Worked_y': 'R&D'}, inplace=True)
-    
-    utilization = pd.merge(utilization, other, on='Entry Month', how='outer', suffixes=('','_y'))
-    utilization.drop('Classification_y', inplace=True, axis=1)
-    utilization.rename(columns={'Hours Worked_y': 'Other'}, inplace=True)
-    
-    utilization = pd.merge(utilization, time_off, on='Entry Month', how='outer', suffixes=('','_y'))
-    utilization.drop('Classification_y', inplace=True, axis=1)
-    utilization.rename(columns={'Hours Worked_y': 'Time Off'}, inplace=True)
-    
-    # Remove classification column and change Hours worked to Billable, update NaN to 0
-    utilization.drop('Classification', inplace=True, axis=1)
-    utilization.rename(columns={'Hours Worked': 'Billable'}, inplace=True)
-    utilization.fillna(0, inplace=True)
-
     # Create list of months and month dictionary for sorting later
     global list_months, semester1, semester2
     list_months = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-                   'Jan', 'Feb', 'Mar']
+                'Jan', 'Feb', 'Mar']
     semester1 = list_months[:7]
     semester2 = list_months[7:]
     
     month_index = np.arange(0,12)
     month_dict = dict(zip(list_months, month_index))
     
-    # Sort by month    
-    utilization['id'] = utilization['Entry Month'].replace(month_dict)
-    utilization.sort_values('id', inplace=True)
-    utilization.set_index('Entry Month', inplace=True)
-    utilization.drop('id', axis=1, inplace=True)
+    # create an empty dataframe to sum each user's utilization
+    total_table = pd.DataFrame(index=list_months)
     
-    # Save variables related to this month for prediction later on
-    # this_month = utilization.last_valid_index()
-    last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
-    if last_day_worked > datetime.datetime.today():
-        last_day_worked = datetime.datetime.today().date()
-    global this_month
-    this_month = last_day_worked.strftime('%b')
-    first_day_worked = df['Entry Date'].min()
-    days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining'] - 1
+    for name in names:
+        # Subset and copy (don't mutate cached data, per doc)
+        df = hours_report.loc[hours_report['User Name']==name].copy()
+
+        # Join activities
+        df = df.set_index('Activity Name').join(
+            activities.set_index('Activity Name')
+            ).reset_index()
+        
+        # Set any null Classification values to 'Billable' in case not in Activity sheet
+        df.fillna({'Classification': 'Billable'}, inplace=True) 
+        
+        # Calculate monthly total hours
+        individual_hours = df.groupby(['Entry Month', 'Classification']).sum().reset_index()
+        
+        # Save hours by category (copy utilization and merge other columns)
+        utilization = individual_hours.loc[individual_hours['Classification']=='Billable'].copy()
+        r_and_d = individual_hours.loc[individual_hours['Classification']=='R&D']
+        other = individual_hours.loc[individual_hours['Classification']=='Other']
+        time_off = individual_hours.loc[individual_hours['Classification']=='Time Off']
+        
+        # Join labor categories to utilization table
+        utilization = pd.merge(utilization, r_and_d, on='Entry Month', how='outer', suffixes=('','_y'))
+        utilization.drop('Classification_y', inplace=True, axis=1)
+        utilization.rename(columns={'Hours Worked_y': 'R&D'}, inplace=True)
+        
+        utilization = pd.merge(utilization, other, on='Entry Month', how='outer', suffixes=('','_y'))
+        utilization.drop('Classification_y', inplace=True, axis=1)
+        utilization.rename(columns={'Hours Worked_y': 'Other'}, inplace=True)
+        
+        utilization = pd.merge(utilization, time_off, on='Entry Month', how='outer', suffixes=('','_y'))
+        utilization.drop('Classification_y', inplace=True, axis=1)
+        utilization.rename(columns={'Hours Worked_y': 'Time Off'}, inplace=True)
+        
+        # Remove classification column and change Hours worked to Billable, update NaN to 0
+        utilization.drop('Classification', inplace=True, axis=1)
+        utilization.rename(columns={'Hours Worked': 'Billable'}, inplace=True)
+        utilization.fillna(0, inplace=True)
+        
+        # Sort by month    
+        utilization['id'] = utilization['Entry Month'].replace(month_dict)
+        utilization.sort_values('id', inplace=True)
+        utilization.set_index('Entry Month', inplace=True)
+        utilization.drop('id', axis=1, inplace=True)
+        
+        # Save variables related to this month for prediction later on
+        # this_month = utilization.last_valid_index()
+        last_day_worked = df.loc[~df['Activity Name'].isin(['Holiday']), 'Entry Date'].max()
+        if last_day_worked > datetime.datetime.today():
+            last_day_worked = datetime.datetime.today().date()
+        global this_month
+        this_month = last_day_worked.strftime('%b')
+        first_day_worked = df['Entry Date'].min()
+        days_remaining = dates.loc[dates['Date']==last_day_worked, 'Remaining'] - 1
+        
+        # Zero fill billable for remaining months
+        existing_months = utilization.index
+        columns = utilization.reset_index().columns
+        utilization.reset_index(inplace=True)
+        for m in list_months:    
+            if m not in existing_months:
+                new_row = pd.Series([m, 0, 0, 0, 0], columns)
+                utilization = utilization.append(new_row, ignore_index=True)
+        
+        # Sort by month again   
+        utilization['id'] = utilization['Entry Month'].replace(month_dict)
+        utilization.sort_values('id', inplace=True)
+        utilization.set_index('Entry Month', inplace=True)
+        utilization.drop('id', axis=1, inplace=True)
+        
+        # Update billable with FTE per month
+        utilization = utilization.join(months['FTE'])
+        
+        # Correct FTE for employees who start in the middle of the performance period
+        first_month_worked = first_day_worked.strftime('%b')
+        first_month_index = list_months.index(first_month_worked)
+        first_month_FTE = dates.loc[dates['Date']==first_day_worked, 'Remaining'] * 8
+        
+        for m in list_months[0:first_month_index]:
+            utilization.at[m, 'FTE'] = 0
+        
+        utilization.at[first_month_worked, 'FTE'] = first_month_FTE
+        
+        total_table = total_table.add(utilization, fill_value=0)
     
-    # Zero fill billable for remaining months
-    existing_months = utilization.index
-    columns = utilization.reset_index().columns
-    utilization.reset_index(inplace=True)
-    for m in list_months:    
-        if m not in existing_months:
-            new_row = pd.Series([m, 0, 0, 0, 0], columns)
-            utilization = utilization.append(new_row, ignore_index=True)
-    
-    # Sort by month again   
-    utilization['id'] = utilization['Entry Month'].replace(month_dict)
-    utilization.sort_values('id', inplace=True)
-    utilization.set_index('Entry Month', inplace=True)
-    utilization.drop('id', axis=1, inplace=True)
-    
-    # Update billable with FTE per month
-    utilization = utilization.join(months['FTE'])
-    
-    # Correct FTE for employees who start in the middle of the performance period
-    first_month_worked = first_day_worked.strftime('%b')
-    first_month_index = list_months.index(first_month_worked)
-    first_month_FTE = dates.loc[dates['Date']==first_day_worked, 'Remaining'] * 8
-    
-    for m in list_months[0:first_month_index]:
-        utilization.at[m, 'FTE'] = 0
-    
-    utilization.at[first_month_worked, 'FTE'] = first_month_FTE   
+    # swap total_table back in for utilization table
+    utilization = total_table
     
     # Calculate actual utilization
     utilization['Utilization'] = utilization['Billable'] / utilization['FTE']
@@ -387,7 +399,7 @@ def plot_hours(data, target, mode='focus'):
         ax1.plot([125]*len(ind), color=full_time_color, linestyle='dotted')        
         
         # Plot planned utilization
-        target_df = targets.loc[targets['User Name'] == name, list_months]
+        target_df = targets.loc[targets['User Name'].isin(name), list_months]
         target_df[list_months] = target_df[list_months].apply(pd.to_numeric)
         target_df.fillna(0, inplace=True)
         if target_df.empty:
@@ -463,7 +475,7 @@ def balloons(predicted, target):
 hours_report, activities, dates, months, names, targets = auth_gspread()
 
 # User selects name
-name = st.selectbox(
+name = st.multiselect(
     'Who are you?', 
     (names)
 )
@@ -475,7 +487,7 @@ chart_loc = st.empty()
 message_loc = st.empty()
         
 # Build utilization report for user
-if name != names[0]:
+if name:  # != names[0]:
     
     # User selects mode
     modes = ['Predictive', 'Classic']
