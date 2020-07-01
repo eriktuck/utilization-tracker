@@ -22,4 +22,5 @@ Data from the Scoreboard should be pasted into the Utilization Input datasheet, 
 
 2. Push changes heroku:
 
-   `heroku push heroku master`
+   `git push heroku master`
+
